@@ -1,0 +1,386 @@
+{% extends "base.html" %}
+{% block title %}Market Prices - AgroMate{% endblock %}
+
+{% block content %}
+
+<!-- Page Hero -->
+<section class="page-hero">
+  <div class="page-hero-overlay"></div>
+  <div class="container text-center">
+    <span class="section-tag-light" data-aos="fade-up">LIVE DATA</span>
+    <h1 class="page-hero-title" data-aos="fade-up" data-aos-delay="100">Market Prices</h1>
+    <p class="page-hero-subtitle" data-aos="fade-up" data-aos-delay="200">
+      Real-time mandi prices from data.gov.in across India.
+    </p>
+    <nav aria-label="breadcrumb" data-aos="fade-up" data-aos-delay="300">
+      <ol class="breadcrumb justify-content-center">
+        <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+        <li class="breadcrumb-item active">Market Prices</li>
+      </ol>
+    </nav>
+  </div>
+</section>
+
+<!-- Main Content -->
+<section class="section-padding">
+  <div class="container">
+
+    <!-- Search Form -->
+    <div class="market-search-card tool-card mb-5" data-aos="fade-up">
+      <div class="tool-card-header">
+        <div class="tool-icon" style="background: linear-gradient(135deg,#16a34a,#15803d);">
+          <i class="bi bi-shop"></i>
+        </div>
+        <div>
+          <h4 class="mb-0">Search Mandi Prices</h4>
+          <p class="text-muted small mb-0">Find current market prices by commodity and state</p>
+        </div>
+      </div>
+
+      <form method="POST" action="{{ url_for('market_prices') }}" class="mt-4">
+        <div class="row g-3">
+          <div class="col-md-5">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-geo-alt me-2 text-success"></i>State <span class="text-danger">*</span>
+            </label>
+            <select name="state" id="stateSelect" class="form-select" required>
+              <option value="">-- Select a state --</option>
+            </select>
+            <small class="text-muted d-block mt-1" id="stateHint"></small>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-basket me-2 text-success"></i>Commodity <span class="text-danger">*</span>
+            </label>
+            <select name="commodity" id="commoditySelect" class="form-select" required disabled>
+              <option value="">-- Select state first --</option>
+            </select>
+            <small class="text-muted d-block mt-1" id="commodityHint"></small>
+          </div>
+          <div class="col-md-2 d-flex align-items-end">
+            <button type="submit" class="btn btn-success w-100">
+              <i class="bi bi-search me-2"></i>Get Prices
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Error -->
+    {% if error %}
+    <div class="alert alert-warning d-flex flex-column gap-2" data-aos="fade-up">
+      <div class="d-flex align-items-start gap-2">
+        <i class="bi bi-exclamation-triangle-fill fs-5 flex-shrink-0 mt-1"></i>
+        <div>
+          {% for line in error.split('\n') %}
+            {% if line.strip() %}
+              <div>{{ line }}</div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Results -->
+    {% if records %}
+    <!-- Debug: Show search parameters -->
+    <div class="alert alert-info small d-flex align-items-center gap-2 mb-4" data-aos="fade-up">
+      <i class="bi bi-info-circle-fill"></i>
+      <span>Results for <strong>{{ commodity }}</strong> in <strong>{{ state }}</strong> • {{ records|length }} records found</span>
+    </div>
+    
+    {% set prices = records | map(attribute='modal_price') | map('float') | list %}
+    {% set min_p  = records | map(attribute='min_price')   | map('float') | list %}
+    {% set max_p  = records | map(attribute='max_price')   | map('float') | list %}
+    {% set avg    = (prices | sum / prices | length) | round(2) %}
+    {% set loc    = state %}
+
+    <!-- Stat Cards -->
+    <div class="row g-4 mb-5" data-aos="fade-up">
+      <div class="col-6 col-md-3">
+        <div class="market-stat-card">
+          <div class="market-stat-icon bg-success bg-opacity-10 text-success">
+            <i class="bi bi-graph-down"></i>
+          </div>
+          <div class="market-stat-value text-success">₹{{ min_p | min | int }}</div>
+          <div class="market-stat-label">Min Price (₹/quintal)</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="market-stat-card">
+          <div class="market-stat-icon bg-danger bg-opacity-10 text-danger">
+            <i class="bi bi-graph-up"></i>
+          </div>
+          <div class="market-stat-value text-danger">₹{{ max_p | max | int }}</div>
+          <div class="market-stat-label">Max Price (₹/quintal)</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="market-stat-card">
+          <div class="market-stat-icon bg-primary bg-opacity-10 text-primary">
+            <i class="bi bi-calculator"></i>
+          </div>
+          <div class="market-stat-value text-primary">₹{{ avg }}</div>
+          <div class="market-stat-label">Avg Modal Price (₹/quintal)</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="market-stat-card">
+          <div class="market-stat-icon bg-warning bg-opacity-10 text-warning">
+            <i class="bi bi-list-ol"></i>
+          </div>
+          <div class="market-stat-value text-warning">{{ records | length }}</div>
+          <div class="market-stat-label">Total Records</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="market-chart-card tool-card mb-5" data-aos="fade-up">
+      <h5 class="mb-4">
+        <i class="bi bi-bar-chart-fill text-success me-2"></i>
+        {{ commodity }} – Modal Prices in {{ loc }}
+      </h5>
+      <canvas id="priceChart" height="100"></canvas>
+    </div>
+
+    <!-- Table + CSV -->
+    <div class="market-table-card tool-card" data-aos="fade-up">
+      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h5 class="mb-0">
+          <i class="bi bi-table text-success me-2"></i>Detailed Records
+        </h5>
+        <a href="{{ url_for('market_prices', commodity=commodity, state=state, export='csv') }}"
+           class="btn btn-outline-success btn-sm">
+          <i class="bi bi-download me-1"></i>Download CSV
+        </a>
+      </div>
+      <div class="table-responsive">
+        <table class="table market-table table-hover align-middle">
+          <thead class="table-success">
+            <tr>
+              <th>#</th>
+              <th>State</th>
+              <th>District</th>
+              <th>Market</th>
+              <th>Commodity</th>
+              <th>Variety</th>
+              <th>Arrival Date</th>
+              <th>Min (₹)</th>
+              <th>Max (₹)</th>
+              <th>Modal (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in records %}
+            <tr>
+              <td class="text-muted small">{{ loop.index }}</td>
+              <td>{{ r.state }}</td>
+              <td>{{ r.district }}</td>
+              <td>{{ r.market }}</td>
+              <td>{{ r.commodity }}</td>
+              <td>{{ r.variety }}</td>
+              <td>{{ r.arrival_date }}</td>
+              <td class="text-success fw-semibold">{{ r.min_price }}</td>
+              <td class="text-danger fw-semibold">{{ r.max_price }}</td>
+              <td class="text-primary fw-bold">{{ r.modal_price }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Chart.js Script -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <script>
+      const labels  = {{ records | map(attribute='market') | list | tojson }};
+      const modals  = {{ records | map(attribute='modal_price') | map('float') | list | tojson }};
+      const mins    = {{ records | map(attribute='min_price')   | map('float') | list | tojson }};
+      const maxes   = {{ records | map(attribute='max_price')   | map('float') | list | tojson }};
+
+      new Chart(document.getElementById('priceChart'), {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: 'Min Price',   data: mins,   backgroundColor: 'rgba(34,197,94,0.6)',  borderColor: '#16a34a', borderWidth: 1 },
+            { label: 'Modal Price', data: modals, backgroundColor: 'rgba(59,130,246,0.6)', borderColor: '#2563eb', borderWidth: 1 },
+            { label: 'Max Price',   data: maxes,  backgroundColor: 'rgba(239,68,68,0.6)',  borderColor: '#dc2626', borderWidth: 1 }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: 'top' } },
+          scales: {
+            x: { ticks: { maxRotation: 45, minRotation: 30 } },
+            y: { beginAtZero: false, title: { display: true, text: '₹ / quintal' } }
+          }
+        }
+      });
+    </script>
+    {% endif %}
+
+  </div>
+</section>
+
+<script>
+// === CASCADING DROPDOWNS: State → Commodity ===
+
+// Load available states on page load
+async function loadAvailableStates() {
+  try {
+    console.log('Fetching available states...');
+    let retries = 0;
+    const maxRetries = 30; // Retry for up to 30 seconds
+    
+    while (retries < maxRetries) {
+      const response = await fetch('{{ url_for("get_market_states") }}');
+      
+      // If still loading (202), wait and retry
+      if (response.status === 202) {
+        console.log('Market data is loading... retrying in 1 second');
+        document.getElementById('stateHint').textContent = '⏳ Loading market data...';
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        retries++;
+        continue;
+      }
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('States fetched:', data);
+      
+      if (data.states && data.states.length > 0) {
+        const stateSelect = document.getElementById('stateSelect');
+        // Clear except first placeholder option
+        stateSelect.innerHTML = '<option value="">-- Select a state --</option>';
+        
+        // Add each state as option
+        data.states.forEach(state => {
+          const option = document.createElement('option');
+          option.value = state;
+          option.textContent = state;
+          stateSelect.appendChild(option);
+        });
+        
+        // Set previously selected state if exists
+        if ('{{ state }}') {
+          stateSelect.value = '{{ state }}';
+        }
+        
+        const hint = document.getElementById('stateHint');
+        hint.textContent = `✓ ${data.states.length} states available with data`;
+      } else {
+        console.warn('No states returned from API');
+      }
+      return; // Successfully loaded
+    }
+    
+    throw new Error('Market data took too long to load');
+  } catch (err) {
+    console.error('Error loading available states:', err);
+    const hint = document.getElementById('stateHint');
+    hint.textContent = '❌ Could not load states - try refreshing the page';
+  }
+}
+
+// Load commodities for selected state
+async function loadCommoditiesForState(state) {
+  if (!state) {
+    // Clear commodity dropdown
+    const commoditySelect = document.getElementById('commoditySelect');
+    commoditySelect.innerHTML = '<option value="">-- Select state first --</option>';
+    commoditySelect.disabled = true;
+    document.getElementById('commodityHint').textContent = '';
+    return;
+  }
+  
+  try {
+    console.log(`Fetching commodities for state: ${state}`);
+    let retries = 0;
+    const maxRetries = 30;
+    
+    while (retries < maxRetries) {
+      const response = await fetch(`{{ url_for("get_market_commodities") }}?state=${encodeURIComponent(state)}`);
+      
+      // If still loading (202), wait and retry
+      if (response.status === 202) {
+        console.log('Market data is loading... retrying in 1 second');
+        document.getElementById('commodityHint').textContent = '⏳ Loading...';
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        retries++;
+        continue;
+      }
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log(`Commodities for ${state}:`, data);
+      
+      const commoditySelect = document.getElementById('commoditySelect');
+      
+      if (data.commodities && data.commodities.length > 0) {
+        // Clear dropdown and add options
+        commoditySelect.innerHTML = '<option value="">-- Select a commodity --</option>';
+        
+        data.commodities.forEach(commodity => {
+          const option = document.createElement('option');
+          option.value = commodity;
+          option.textContent = commodity;
+          commoditySelect.appendChild(option);
+        });
+        
+        // Set previously selected commodity if exists
+        if ('{{ commodity }}') {
+          commoditySelect.value = '{{ commodity }}';
+        }
+        
+        // Enable dropdown
+        commoditySelect.disabled = false;
+        
+        const hint = document.getElementById('commodityHint');
+        hint.textContent = `✓ ${data.commodities.length} commodities available in ${state}`;
+      } else {
+        commoditySelect.innerHTML = `<option value="">No commodities found in ${state}</option>`;
+        commoditySelect.disabled = true;
+        document.getElementById('commodityHint').textContent = '❌ No data for this state';
+      }
+      return; // Successfully loaded
+    }
+    
+    throw new Error('Commodities data took too long to load');
+  } catch (err) {
+    console.error(`Error loading commodities for ${state}:`, err);
+    const commoditySelect = document.getElementById('commoditySelect');
+    commoditySelect.innerHTML = `<option value="">Error loading commodities</option>`;
+    commoditySelect.disabled = true;
+    document.getElementById('commodityHint').textContent = '❌ Error loading commodities - try refreshing';
+  }
+}
+
+// Event listener: When state changes, load commodities
+document.addEventListener('DOMContentLoaded', async function() {
+  const stateSelect = document.getElementById('stateSelect');
+  
+  // Wait for states to load on page load
+  await loadAvailableStates();
+  
+  // NOW load commodities for the previously selected state (if any)
+  if (stateSelect.value) {
+    await loadCommoditiesForState(stateSelect.value);
+  }
+  
+  // Load commodities when state changes
+  stateSelect.addEventListener('change', function() {
+    loadCommoditiesForState(this.value);
+  });
+});
+</script>
+
+{% endblock %}
